@@ -1,15 +1,17 @@
 # Face Recognition Door Unlock System
 
-A real-time face recognition system for door access control with anti-spoofing protection.
+A real-time face recognition system for door access control with anti-spoofing protection and multiple detection/recognition backends.
 
 ## Features
 
+- **Multiple Detection Backends**: dlib HOG, dlib CNN, MediaPipe, OpenCV DNN, YOLO
+- **Multiple Recognition Backends**: dlib ResNet, DeepFace (ArcFace, Facenet, etc.), AdaFace
 - **Real-time Face Detection**: Captures and processes webcam frames in real-time
 - **Image Quality Assessment**: Checks lighting, blur, and obstructions before processing
-- **Face Embedding Extraction**: Uses 128-dimensional face embeddings for matching
+- **Face Alignment**: Optional eye-based alignment for improved accuracy
+- **Debug Panel**: Visual debugging with intermediate processing images
 - **Threshold-based Matching**: Configurable distance threshold with margin verification
-- **Anti-Replay Protection**: Detects photo/video replay attacks using perceptual hashing
-- **Anti-Reuse Protection**: Cooldown period between successive unlocks
+- **Anti-Replay Protection**: Detects photo/video replay attacks
 - **Multi-embedding Storage**: Stores multiple embeddings per person for improved accuracy
 
 ## System Flow
@@ -33,6 +35,8 @@ A real-time face recognition system for door access control with anti-spoofing p
                               ▼
                  ┌────────────────────────┐
                  │   FACE DETECTION       │
+                 │  - Backend: dlib/MP/   │
+                 │    OpenCV/YOLO         │
                  │  - Find largest face   │
                  │  - Detect landmarks    │
                  └────────────────────────┘
@@ -42,13 +46,18 @@ A real-time face recognition system for door access control with anti-spoofing p
                              Yes
                               ▼
                  ┌────────────────────────┐
-                 │  EMBEDDING EXTRACTION  │
-                 │  - 128-dim vector      │
+                 │  PREPROCESSING         │
+                 │  - Crop + Pad/Resize   │
+                 │  - Face Alignment      │
                  └────────────────────────┘
                               │
-                Extraction OK? ──No──▶ Capture Next Frame
+                              ▼
+                 ┌────────────────────────┐
+                 │  EMBEDDING EXTRACTION  │
+                 │  - Backend: dlib/      │
+                 │    DeepFace/AdaFace    │
+                 └────────────────────────┘
                               │
-                             Yes
                               ▼
                  ┌────────────────────────┐
                  │   DATABASE SEARCH      │
@@ -65,7 +74,6 @@ A real-time face recognition system for door access control with anti-spoofing p
                  ┌────────────────────────┐
                  │  ANTI-REPLAY CHECK     │
                  │  - Frame hash compare  │
-                 │  - Liveness estimation │
                  │  - Reuse cooldown      │
                  └────────────────────────┘
                               │
@@ -82,45 +90,50 @@ A real-time face recognition system for door access control with anti-spoofing p
 
 ## Installation
 
-### Prerequisites
-
-- Python 3.10 or higher
-- Webcam
-- Windows/Linux/macOS
-
-### Install Dependencies
+### Option 1: Conda (Recommended)
 
 ```bash
-# Create virtual environment (recommended)
+# Create environment from file
+conda env create -f environment.yml
+conda activate ML
+```
+
+### Option 2: Pip
+
+```bash
+# Create virtual environment
 python -m venv venv
 
-# Activate virtual environment
-# Windows:
+# Activate (Windows)
 venv\Scripts\activate
-# Linux/macOS:
+# Activate (Linux/macOS)
 source venv/bin/activate
 
-# Install dependencies
+# Install core dependencies
 pip install -r requirements.txt
 ```
 
-### Note on dlib Installation
+### Install Optional Backends
 
-The `face-recognition` library depends on `dlib`, which may require additional setup:
-
-**Windows:**
-- Install Visual Studio Build Tools with C++ support
-- Or install pre-built wheel: `pip install dlib`
-
-**Linux:**
 ```bash
-sudo apt-get install build-essential cmake
-sudo apt-get install libopenblas-dev liblapack-dev
+# MediaPipe (fast detection)
+pip install mediapipe
+
+# DeepFace (multiple recognition models)
+pip install deepface
+
+# YOLO detection
+pip install ultralytics
+
+# AdaFace (requires PyTorch)
+pip install torch torchvision
 ```
 
-**macOS:**
+### Note on dlib + numpy
+
+⚠️ **dlib requires numpy < 2.0**. If you get "Unsupported image type" errors:
 ```bash
-brew install cmake
+pip install "numpy<2.0"
 ```
 
 ## Usage
@@ -131,15 +144,18 @@ brew install cmake
 # Run the door unlock system
 python main.py
 
-# Use a specific camera (default is 0)
+# Use a specific camera
 python main.py --camera 1
 ```
 
 ### Controls (when running)
 
-- `q` - Quit the application
-- `r` - Register a new face (interactive)
-- `d` - Toggle debug display
+| Key | Action |
+|-----|--------|
+| `q` | Quit |
+| `r` | Register new face (interactive) |
+| `d` | Toggle debug info overlay |
+| `p` | Toggle debug panel (intermediate images) |
 
 ### Command Line Options
 
@@ -147,87 +163,145 @@ python main.py --camera 1
 # List all registered persons
 python main.py --list-persons
 
-# Register a face from command line
+# Register a face
 python main.py --register "John Doe"
 
-# Remove a person from database
+# Remove a person
 python main.py --remove "John Doe"
 ```
 
 ## Configuration
 
-Edit `config.py` to customize thresholds and behavior:
+Edit `config.py` to customize:
 
-### Image Quality
+### Detection Backend
 ```python
-MIN_BRIGHTNESS = 40       # Minimum acceptable brightness (0-255)
-MAX_BRIGHTNESS = 220      # Maximum acceptable brightness
-BLUR_THRESHOLD = 100.0    # Laplacian variance threshold for blur detection
+# Options: "dlib_hog", "dlib_cnn", "mediapipe", "opencv_dnn", "yolo"
+FACE_DETECTION_BACKEND = "dlib_hog"
+FACE_DETECTION_CONFIDENCE = 0.5
+```
+
+### Recognition Backend
+```python
+# Options: "dlib", "deepface", "adaface"
+FACE_RECOGNITION_BACKEND = "dlib"
+
+# For DeepFace: "ArcFace", "Facenet512", "VGG-Face", etc.
+DEEPFACE_MODEL = "ArcFace"
+```
+
+### Preprocessing
+```python
+# Options: "none", "resize", "pad_resize"
+EMBEDDING_PREPROCESS_MODE = "pad_resize"
+EMBEDDING_TARGET_SIZE = 160
+
+# Face alignment (rotate to make eyes horizontal)
+ENABLE_FACE_ALIGNMENT = True
+ALIGNMENT_REQUIRE_DETECTOR_LANDMARKS = True
 ```
 
 ### Face Matching
 ```python
-MATCH_THRESHOLD = 0.5     # Maximum distance for a match (lower = stricter)
-MATCH_MARGIN = 0.1        # Required margin between best and second-best match
+MATCH_THRESHOLD = 0.5     # Max distance for match (lower = stricter)
+MATCH_MARGIN = 0.1        # Required margin over second-best match
 ```
 
-### Anti-Replay Protection
+### Image Quality
 ```python
-REPLAY_TIME_WINDOW = 30.0          # Seconds to check for replay attacks
-REUSE_COOLDOWN = 5.0               # Minimum seconds between unlocks for same person
-HASH_SIMILARITY_THRESHOLD = 10     # Perceptual hash distance threshold
+MIN_BRIGHTNESS = 40
+MAX_BRIGHTNESS = 220
+BLUR_THRESHOLD = 100.0
 ```
+
+## Debug Panel
+
+Press `p` to open the debug panel showing a 3x3 grid of intermediate images:
+
+| Original | Quality Check | Face Detection |
+|----------|---------------|----------------|
+| **Face Crop** | **Aligned** | **Padded/Resized** |
+| **Landmarks** | **Embedding Input** | **Match Result** |
 
 ## Project Structure
 
 ```
 FaceRecognition/
-├── main.py              # Main application and CLI
-├── config.py            # Configuration settings
-├── image_quality.py     # Image quality assessment
-├── face_processor.py    # Face detection and embedding
-├── database.py          # Face database management
-├── anti_replay.py       # Anti-spoofing protection
-├── requirements.txt     # Python dependencies
-├── README.md            # This file
-└── face_database.pkl    # Stored face data (created at runtime)
+├── main.py                 # Main application and CLI
+├── config.py               # Configuration settings
+├── face_processor.py       # Face detection and embedding pipeline
+├── detection_backends.py   # Detection backends (dlib, mediapipe, opencv, yolo)
+├── recognition_backends.py # Recognition backends (dlib, deepface, adaface)
+├── image_quality.py        # Image quality assessment
+├── database.py             # Face database management
+├── anti_replay.py          # Anti-spoofing protection
+├── debug_panel.py          # Debug visualization panel
+├── requirements.txt        # Python dependencies
+├── environment.yml         # Conda environment
+├── face_database.pkl       # Stored face data (runtime)
+└── README.md
 ```
+
+## Backend Comparison
+
+### Detection Backends
+
+| Backend | Speed | Accuracy | Landmarks | Notes |
+|---------|-------|----------|-----------|-------|
+| `dlib_hog` | Fast | Good | 68 pts | CPU, default |
+| `dlib_cnn` | Slow | Better | 68 pts | GPU recommended |
+| `mediapipe` | Very Fast | Good | 6 pts | Best for real-time |
+| `opencv_dnn` | Fast | Good | None | No extra deps |
+| `yolo` | Fast | Excellent | 5 pts* | Needs face model |
+
+*YOLO landmarks require YOLOv8-face model
+
+### Recognition Backends
+
+| Backend | Dimensions | Accuracy | Notes |
+|---------|------------|----------|-------|
+| `dlib` | 128-D | Good | Default, fast |
+| `deepface` | Varies | Excellent | Multiple models |
+| `adaface` | 512-D | SOTA | Best for low quality |
+
+## Troubleshooting
+
+### "Unsupported image type" error
+```bash
+pip install "numpy<2.0"
+```
+
+### Camera not detected
+- Try different camera index: `--camera 0`, `--camera 1`
+- Check no other app is using the camera
+- Run `python test_webcam.py` to diagnose
+
+### MediaPipe initialization failed
+Model downloads automatically. If it fails:
+```bash
+# Check internet connection
+# Or manually download blaze_face_short_range.tflite
+```
+
+### Distorted face in debug panel
+- Set `EMBEDDING_PREPROCESS_MODE = "pad_resize"` (not "resize")
+- Check `ALIGNMENT_REQUIRE_DETECTOR_LANDMARKS = True` if using YOLO
+
+### Poor recognition accuracy
+- Ensure good lighting
+- Register multiple embeddings per person
+- Try `FACE_RECOGNITION_BACKEND = "deepface"` with `DEEPFACE_MODEL = "ArcFace"`
+- Lower `MATCH_THRESHOLD` (e.g., 0.4)
 
 ## Security Considerations
 
-This system implements several security measures:
-
-1. **Quality Gating**: Poor quality images are rejected to prevent low-confidence matches
-2. **Threshold + Margin**: Matches must exceed threshold AND have sufficient margin over alternatives
-3. **Perceptual Hashing**: Detects replayed photos/videos
-4. **Liveness Estimation**: Basic checks for screen displays and printed photos
-5. **Cooldown Period**: Prevents rapid-fire unlock attempts
-
-### Limitations
-
-⚠️ This is a demonstration system. For production security applications:
+⚠️ This is a demonstration system. For production:
 
 - Add hardware liveness detection (IR, depth camera)
 - Implement multi-factor authentication
 - Use encrypted storage for embeddings
-- Add audit logging
+- Add comprehensive audit logging
 - Consider edge cases (twins, makeup, aging)
-
-## Troubleshooting
-
-### Camera not detected
-- Check camera index with `--camera 0`, `--camera 1`, etc.
-- Ensure no other application is using the camera
-
-### Poor recognition accuracy
-- Ensure good lighting conditions
-- Register multiple embeddings per person
-- Adjust `MATCH_THRESHOLD` in config
-
-### Slow performance
-- Use `FACE_DETECTION_MODEL = 'hog'` (faster, CPU)
-- Reduce `ENCODING_NUM_JITTERS` to 1
-- Lower camera resolution in config
 
 ## License
 
