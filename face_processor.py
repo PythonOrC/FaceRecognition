@@ -2,9 +2,9 @@
 Face Detection and Embedding Extraction Module
 
 Handles:
-- Face detection using face_recognition library
+- Face detection using multiple backends (dlib, mediapipe, opencv, yolo)
 - Landmark detection
-- Embedding vector extraction
+- Embedding vector extraction using multiple backends (dlib, deepface, adaface)
 - Finding the largest face in frame
 """
 
@@ -16,6 +16,8 @@ from typing import Optional, Tuple, List
 
 import config
 from debug_panel import get_debug_panel, debug_enabled
+from detection_backends import get_detector, DetectedFace
+from recognition_backends import get_embedder
 
 
 @dataclass
@@ -39,27 +41,31 @@ class DetectionResult:
     message: str
 
 
-def detect_faces(frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+def detect_faces(
+    frame: np.ndarray,
+) -> Tuple[List[Tuple[int, int, int, int]], List[Optional[dict]]]:
     """
-    Detect all faces in the frame.
+    Detect all faces in the frame using configured backend.
 
     Args:
         frame: BGR image from OpenCV
 
     Returns:
-        List of face locations as (top, right, bottom, left) tuples
+        Tuple of (face_locations, landmarks_list)
+        - face_locations: List of (top, right, bottom, left) tuples
+        - landmarks_list: List of landmark dicts (may be None for some backends)
     """
-    # Convert BGR to RGB for face_recognition
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    detector = get_detector()
+    detected_faces = detector.detect(frame)
 
-    # Detect faces
-    face_locations = face_recognition.face_locations(
-        rgb_frame,
-        number_of_times_to_upsample=config.FACE_DETECTION_UPSAMPLES,
-        model=config.FACE_DETECTION_MODEL,
-    )
+    face_locations = []
+    landmarks_list = []
 
-    return face_locations
+    for face in detected_faces:
+        face_locations.append(face.location)
+        landmarks_list.append(face.landmarks)
+
+    return face_locations, landmarks_list
 
 
 def get_face_area(location: Tuple[int, int, int, int]) -> int:
@@ -88,7 +94,9 @@ def find_largest_face(
 
 
 def detect_landmarks(
-    frame: np.ndarray, face_location: Tuple[int, int, int, int]
+    frame: np.ndarray,
+    face_location: Tuple[int, int, int, int],
+    predetected_landmarks: Optional[dict] = None,
 ) -> Optional[dict]:
     """
     Detect facial landmarks for a specific face.
@@ -96,10 +104,16 @@ def detect_landmarks(
     Args:
         frame: BGR image from OpenCV
         face_location: Face location tuple
+        predetected_landmarks: Optional landmarks from detection backend
 
     Returns:
         Dictionary of facial landmarks or None if detection fails
     """
+    # Use pre-detected landmarks if available and sufficient
+    if predetected_landmarks and len(predetected_landmarks) >= 3:
+        return predetected_landmarks
+
+    # Fall back to face_recognition for full landmarks
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     landmarks_list = face_recognition.face_landmarks(
@@ -404,7 +418,7 @@ def extract_embedding(
     landmarks: Optional[dict] = None,
 ) -> Optional[np.ndarray]:
     """
-    Extract the 128-dimensional face embedding vector.
+    Extract face embedding vector using configured backend.
 
     Args:
         frame: BGR image from OpenCV
@@ -412,25 +426,34 @@ def extract_embedding(
         landmarks: Optional face landmarks for alignment
 
     Returns:
-        128-dimensional numpy array or None if extraction fails
+        Embedding numpy array or None if extraction fails
     """
-    rgb_frame, embed_location = _prepare_face_for_embedding(
-        frame, face_location, landmarks
-    )
+    # Check if using dlib backend (uses preprocessing pipeline)
+    backend = config.FACE_RECOGNITION_BACKEND
 
-    try:
-        encodings = face_recognition.face_encodings(
-            rgb_frame,
-            known_face_locations=[embed_location],
-            num_jitters=config.ENCODING_NUM_JITTERS,
+    if backend == "dlib":
+        # Use preprocessing pipeline for dlib
+        rgb_frame, embed_location = _prepare_face_for_embedding(
+            frame, face_location, landmarks
         )
 
-        if encodings:
-            return encodings[0]
-    except Exception as e:
-        print(f"Embedding extraction error: {e}")
+        try:
+            encodings = face_recognition.face_encodings(
+                rgb_frame,
+                known_face_locations=[embed_location],
+                num_jitters=config.ENCODING_NUM_JITTERS,
+            )
 
-    return None
+            if encodings:
+                return encodings[0]
+        except Exception as e:
+            print(f"dlib embedding error: {e}")
+
+        return None
+    else:
+        # Use modular embedder backend
+        embedder = get_embedder()
+        return embedder.extract(frame, face_location, landmarks)
 
 
 def process_frame(frame: np.ndarray) -> DetectionResult:
@@ -454,8 +477,8 @@ def process_frame(frame: np.ndarray) -> DetectionResult:
     if debug_enabled():
         debug.set_original(frame)
 
-    # Step 1: Detect all faces
-    face_locations = detect_faces(frame)
+    # Step 1: Detect all faces (returns locations and pre-detected landmarks)
+    face_locations, predetected_landmarks = detect_faces(frame)
 
     if not face_locations:
         # Debug: show no detection
@@ -472,17 +495,26 @@ def process_frame(frame: np.ndarray) -> DetectionResult:
     largest_face = find_largest_face(face_locations)
     face_area = get_face_area(largest_face)
 
+    # Get index and pre-detected landmarks for largest face
+    largest_idx = (
+        face_locations.index(largest_face)
+        if largest_face in face_locations
+        else 0
+    )
+    largest_predetected_landmarks = (
+        predetected_landmarks[largest_idx]
+        if predetected_landmarks and largest_idx < len(predetected_landmarks)
+        else None
+    )
+
     # Debug: capture face detection result
     if debug_enabled():
-        largest_idx = (
-            face_locations.index(largest_face)
-            if largest_face in face_locations
-            else 0
-        )
         debug.set_face_detection(frame, face_locations, largest_idx)
 
-    # Step 3: Detect landmarks
-    landmarks = detect_landmarks(frame, largest_face)
+    # Step 3: Detect landmarks (use pre-detected if available, otherwise use face_recognition)
+    landmarks = detect_landmarks(
+        frame, largest_face, largest_predetected_landmarks
+    )
 
     # Debug: capture landmarks
     if debug_enabled():

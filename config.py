@@ -25,14 +25,39 @@ MAX_FACE_AREA_PERCENT = 60.0
 # FACE DETECTION SETTINGS
 # ═══════════════════════════════════════════════════════════════════
 
+# Face detection backend:
+#   - "dlib_hog": dlib HOG detector (fast, CPU)
+#   - "dlib_cnn": dlib CNN detector (accurate, GPU recommended)
+#   - "mediapipe": MediaPipe Face Detection (very fast, good accuracy)
+#   - "opencv_dnn": OpenCV DNN Res10 SSD (fast, no extra deps)
+#   - "yolo": YOLOv8 face detection (fast, accurate)
+FACE_DETECTION_BACKEND = "mediapipe"
+
+# Minimum detection confidence (0.0 - 1.0)
+FACE_DETECTION_CONFIDENCE = 0.5
+
 # Minimum number of landmarks required
 MIN_LANDMARKS = 5
 
-# Face detection model: 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
+# Legacy: Face detection model for dlib backend
 FACE_DETECTION_MODEL = "hog"
 
-# Number of times to upsample image for face detection
+# Number of times to upsample image for face detection (dlib)
 FACE_DETECTION_UPSAMPLES = 1
+
+# ═══════════════════════════════════════════════════════════════════
+# FACE RECOGNITION / EMBEDDING SETTINGS
+# ═══════════════════════════════════════════════════════════════════
+
+# Face recognition backend:
+#   - "dlib": dlib ResNet (128-D, default)
+#   - "deepface": DeepFace library (multiple models)
+#   - "adaface": AdaFace (512-D, SOTA for low quality)
+FACE_RECOGNITION_BACKEND = "dlib"
+
+# DeepFace model (if using deepface backend):
+#   - "VGG-Face", "Facenet", "Facenet512", "OpenFace", "ArcFace", etc.
+DEEPFACE_MODEL = "ArcFace"
 
 # Number of re-samples for encoding (higher = more accurate but slower)
 ENCODING_NUM_JITTERS = 1
@@ -42,7 +67,7 @@ ENCODING_NUM_JITTERS = 1
 #   - "resize": crop face and resize to target size
 #   - "pad_resize": pad face crop to square, then resize
 #   - "align": align face using eye landmarks, then resize
-EMBEDDING_PREPROCESS_MODE = "pad_resize"
+EMBEDDING_PREPROCESS_MODE = "resize"
 
 # Enable face alignment (rotate to make eyes horizontal)
 # Works with any mode, applied before other preprocessing
