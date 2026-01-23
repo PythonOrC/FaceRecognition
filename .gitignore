@@ -3,3 +3,5 @@ face_database.db
 shape_predictor_68_face_landmarks.dat
 dlib_face_recognition_resnet_model_v1.dat
 __pycache__/
+yolov8n.pt
+blaze_face_short_range.tflite

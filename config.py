@@ -31,7 +31,7 @@ MAX_FACE_AREA_PERCENT = 60.0
 #   - "mediapipe": MediaPipe Face Detection (very fast, good accuracy)
 #   - "opencv_dnn": OpenCV DNN Res10 SSD (fast, no extra deps)
 #   - "yolo": YOLOv8 face detection (fast, accurate)
-FACE_DETECTION_BACKEND = "yolo"
+FACE_DETECTION_BACKEND = "dlib_hog"
 
 # Minimum detection confidence (0.0 - 1.0)
 FACE_DETECTION_CONFIDENCE = 0.5
@@ -67,7 +67,7 @@ ENCODING_NUM_JITTERS = 1
 #   - "resize": crop face and resize to target size
 #   - "pad_resize": pad face crop to square, then resize
 #   - "align": align face using eye landmarks, then resize
-EMBEDDING_PREPROCESS_MODE = "resize"
+EMBEDDING_PREPROCESS_MODE = "pad_resize"
 
 # Enable face alignment (rotate to make eyes horizontal)
 # Works with any mode, applied before other preprocessing
