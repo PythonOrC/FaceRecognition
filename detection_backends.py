@@ -123,65 +123,170 @@ class MediaPipeDetector(BaseDetector):
     """MediaPipe face detector (very fast, good accuracy)."""
 
     def __init__(self):
+        self._available = False
+        self._name = "mediapipe"
+        
         try:
             import mediapipe as mp
-
-            self.mp_face = mp.solutions.face_detection
-            self.detector = self.mp_face.FaceDetection(
-                model_selection=1,  # 0 for short-range, 1 for full-range
-                min_detection_confidence=config.FACE_DETECTION_CONFIDENCE,
-            )
-            self._available = True
-        except ImportError:
-            print("Warning: MediaPipe not installed. Run: pip install mediapipe")
+            
+            # Try new Tasks API (MediaPipe >= 0.10)
+            if hasattr(mp, 'tasks'):
+                from mediapipe.tasks import python
+                from mediapipe.tasks.python import vision
+                
+                # Create face detector with Tasks API
+                base_options = python.BaseOptions(
+                    model_asset_path=self._get_model_path()
+                )
+                options = vision.FaceDetectorOptions(
+                    base_options=base_options,
+                    min_detection_confidence=config.FACE_DETECTION_CONFIDENCE,
+                )
+                self.detector = vision.FaceDetector.create_from_options(options)
+                self._use_tasks_api = True
+                self._available = True
+                print("MediaPipe initialized with Tasks API")
+                
+            # Try legacy solutions API (MediaPipe < 0.10)
+            elif hasattr(mp, 'solutions'):
+                self.mp_face = mp.solutions.face_detection
+                self.detector = self.mp_face.FaceDetection(
+                    model_selection=1,
+                    min_detection_confidence=config.FACE_DETECTION_CONFIDENCE,
+                )
+                self._use_tasks_api = False
+                self._available = True
+                print("MediaPipe initialized with Solutions API")
+            else:
+                print("Warning: MediaPipe API not recognized")
+                
+        except Exception as e:
+            print(f"Warning: MediaPipe initialization failed: {e}")
+            print("Tip: For Tasks API, you may need the model file.")
+            # Try fallback to OpenCV
             self._available = False
-        self._name = "mediapipe"
+    
+    def _get_model_path(self) -> str:
+        """Get or download the MediaPipe face detection model."""
+        import os
+        
+        model_name = "blaze_face_short_range.tflite"
+        
+        # Check if model exists locally
+        if os.path.exists(model_name):
+            return model_name
+        
+        # Try to download
+        try:
+            import urllib.request
+            url = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
+            print(f"Downloading MediaPipe face model...")
+            urllib.request.urlretrieve(url, model_name)
+            print(f"Downloaded {model_name}")
+            return model_name
+        except Exception as e:
+            print(f"Could not download model: {e}")
+            raise
 
     def detect(self, frame: np.ndarray) -> List[DetectedFace]:
         if not self._available:
             return []
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w = frame.shape[:2]
-
-        results = self.detector.process(rgb)
-
         faces = []
-        if results.detections:
-            for detection in results.detections:
-                bbox = detection.location_data.relative_bounding_box
-
-                # Convert relative to absolute coordinates
-                left = int(bbox.xmin * w)
-                top = int(bbox.ymin * h)
-                right = int((bbox.xmin + bbox.width) * w)
-                bottom = int((bbox.ymin + bbox.height) * h)
-
+        
+        if self._use_tasks_api:
+            # Tasks API
+            import mediapipe as mp
+            
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            
+            result = self.detector.detect(mp_image)
+            
+            for detection in result.detections:
+                bbox = detection.bounding_box
+                
+                left = bbox.origin_x
+                top = bbox.origin_y
+                right = left + bbox.width
+                bottom = top + bbox.height
+                
                 # Clamp to image bounds
                 left = max(0, left)
                 top = max(0, top)
                 right = min(w, right)
                 bottom = min(h, bottom)
-
-                # Extract landmarks if available
+                
+                # Extract keypoints as landmarks (6 keypoints from Face Detection)
                 landmarks = None
-                if detection.location_data.relative_keypoints:
-                    kps = detection.location_data.relative_keypoints
-                    # MediaPipe provides 6 keypoints: right_eye, left_eye, nose_tip,
-                    # mouth_center, right_ear_tragion, left_ear_tragion
-                    landmarks = {
-                        "right_eye": [(int(kps[0].x * w), int(kps[0].y * h))],
-                        "left_eye": [(int(kps[1].x * w), int(kps[1].y * h))],
-                        "nose_tip": [(int(kps[2].x * w), int(kps[2].y * h))],
-                    }
-
+                if detection.keypoints:
+                    kps = detection.keypoints
+                    # Keypoints order: right_eye, left_eye, nose_tip, mouth_center, right_ear, left_ear
+                    landmarks = {}
+                    if len(kps) > 0:
+                        landmarks["right_eye"] = [(int(kps[0].x * w), int(kps[0].y * h))]
+                    if len(kps) > 1:
+                        landmarks["left_eye"] = [(int(kps[1].x * w), int(kps[1].y * h))]
+                    if len(kps) > 2:
+                        landmarks["nose_tip"] = [(int(kps[2].x * w), int(kps[2].y * h))]
+                    if len(kps) > 3:
+                        landmarks["mouth_center"] = [(int(kps[3].x * w), int(kps[3].y * h))]
+                    if len(kps) > 4:
+                        landmarks["right_ear"] = [(int(kps[4].x * w), int(kps[4].y * h))]
+                    if len(kps) > 5:
+                        landmarks["left_ear"] = [(int(kps[5].x * w), int(kps[5].y * h))]
+                
+                conf = detection.categories[0].score if detection.categories else 0.5
+                
                 faces.append(
                     DetectedFace(
                         location=(top, right, bottom, left),
-                        confidence=detection.score[0],
+                        confidence=conf,
                         landmarks=landmarks,
                     )
                 )
+        else:
+            # Legacy Solutions API
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.detector.process(rgb)
+
+            if results.detections:
+                for detection in results.detections:
+                    bbox = detection.location_data.relative_bounding_box
+
+                    left = int(bbox.xmin * w)
+                    top = int(bbox.ymin * h)
+                    right = int((bbox.xmin + bbox.width) * w)
+                    bottom = int((bbox.ymin + bbox.height) * h)
+
+                    left = max(0, left)
+                    top = max(0, top)
+                    right = min(w, right)
+                    bottom = min(h, bottom)
+
+                    landmarks = None
+                    if detection.location_data.relative_keypoints:
+                        kps = detection.location_data.relative_keypoints
+                        landmarks = {
+                            "right_eye": [(int(kps[0].x * w), int(kps[0].y * h))],
+                            "left_eye": [(int(kps[1].x * w), int(kps[1].y * h))],
+                            "nose_tip": [(int(kps[2].x * w), int(kps[2].y * h))],
+                        }
+                        if len(kps) > 3:
+                            landmarks["mouth_center"] = [(int(kps[3].x * w), int(kps[3].y * h))]
+                        if len(kps) > 4:
+                            landmarks["right_ear"] = [(int(kps[4].x * w), int(kps[4].y * h))]
+                        if len(kps) > 5:
+                            landmarks["left_ear"] = [(int(kps[5].x * w), int(kps[5].y * h))]
+
+                    faces.append(
+                        DetectedFace(
+                            location=(top, right, bottom, left),
+                            confidence=detection.score[0],
+                            landmarks=landmarks,
+                        )
+                    )
 
         return faces
 
@@ -276,6 +381,8 @@ class YOLODetector(BaseDetector):
 
     def __init__(self):
         self._available = False
+        self._face_mode = False
+        self._has_keypoints = False
 
         try:
             from ultralytics import YOLO
@@ -284,6 +391,9 @@ class YOLODetector(BaseDetector):
             # You can use yolov8n-face.pt or similar
             try:
                 self.model = YOLO("yolov8n-face.pt")
+                self._face_mode = True
+                self._has_keypoints = True  # Face models usually have keypoints
+                print("YOLO face model loaded with keypoints support")
             except Exception:
                 # Fallback to general YOLO model (will detect 'person', not ideal)
                 print("YOLOv8 face model not found, trying general model...")
@@ -291,10 +401,11 @@ class YOLODetector(BaseDetector):
                     self.model = YOLO("yolov8n.pt")
                     self._person_class = 0  # COCO class for person
                     self._face_mode = False
+                    self._has_keypoints = False
+                    print("Using general YOLO model (no face keypoints)")
                 except Exception:
                     raise ImportError("No YOLO model available")
 
-            self._face_mode = True
             self._available = True
 
         except ImportError:
@@ -309,7 +420,8 @@ class YOLODetector(BaseDetector):
         results = self.model(frame, verbose=False)[0]
 
         faces = []
-        for box in results.boxes:
+        
+        for i, box in enumerate(results.boxes):
             # For face model, all detections are faces
             # For general model, filter by class
             if not self._face_mode and int(box.cls[0]) != self._person_class:
@@ -324,7 +436,24 @@ class YOLODetector(BaseDetector):
             # Convert to (top, right, bottom, left)
             location = (int(y1), int(x2), int(y2), int(x1))
 
-            faces.append(DetectedFace(location=location, confidence=conf))
+            # Extract keypoints if available (YOLOv8-face provides 5 keypoints)
+            landmarks = None
+            if self._has_keypoints and results.keypoints is not None:
+                try:
+                    kpts = results.keypoints[i].data[0].cpu().numpy()
+                    # YOLOv8-face keypoints: left_eye, right_eye, nose, left_mouth, right_mouth
+                    if len(kpts) >= 5:
+                        landmarks = {
+                            "left_eye": [(int(kpts[0][0]), int(kpts[0][1]))],
+                            "right_eye": [(int(kpts[1][0]), int(kpts[1][1]))],
+                            "nose_tip": [(int(kpts[2][0]), int(kpts[2][1]))],
+                            "left_mouth": [(int(kpts[3][0]), int(kpts[3][1]))],
+                            "right_mouth": [(int(kpts[4][0]), int(kpts[4][1]))],
+                        }
+                except Exception:
+                    pass  # No keypoints available
+
+            faces.append(DetectedFace(location=location, confidence=conf, landmarks=landmarks))
 
         return faces
 

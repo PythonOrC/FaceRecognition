@@ -31,7 +31,7 @@ MAX_FACE_AREA_PERCENT = 60.0
 #   - "mediapipe": MediaPipe Face Detection (very fast, good accuracy)
 #   - "opencv_dnn": OpenCV DNN Res10 SSD (fast, no extra deps)
 #   - "yolo": YOLOv8 face detection (fast, accurate)
-FACE_DETECTION_BACKEND = "mediapipe"
+FACE_DETECTION_BACKEND = "yolo"
 
 # Minimum detection confidence (0.0 - 1.0)
 FACE_DETECTION_CONFIDENCE = 0.5
@@ -72,6 +72,10 @@ EMBEDDING_PREPROCESS_MODE = "resize"
 # Enable face alignment (rotate to make eyes horizontal)
 # Works with any mode, applied before other preprocessing
 ENABLE_FACE_ALIGNMENT = True
+
+# Only use landmarks from detector for alignment (don't fall back to face_recognition)
+# Set to True if detector landmarks don't match face_recognition (e.g., YOLO)
+ALIGNMENT_REQUIRE_DETECTOR_LANDMARKS = True
 
 # Target size for embedding crop (square)
 EMBEDDING_TARGET_SIZE = 160

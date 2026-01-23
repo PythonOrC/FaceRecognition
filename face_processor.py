@@ -215,8 +215,11 @@ def _get_eye_centers(
     """
     Get the center points of left and right eyes from landmarks.
 
+    Note: Returns eyes in IMAGE coordinates (left = smaller x, right = larger x)
+    regardless of which eye is which from the person's perspective.
+
     Returns:
-        (left_eye_center, right_eye_center) or (None, None) if not found
+        (left_eye_center, right_eye_center) in image coordinates, or (None, None) if not found
     """
     if not landmarks:
         return None, None
@@ -228,14 +231,24 @@ def _get_eye_centers(
         return None, None
 
     # Calculate center of each eye
-    left_center = (
+    eye1_center = (
         sum(p[0] for p in left_eye_pts) / len(left_eye_pts),
         sum(p[1] for p in left_eye_pts) / len(left_eye_pts),
     )
-    right_center = (
+    eye2_center = (
         sum(p[0] for p in right_eye_pts) / len(right_eye_pts),
         sum(p[1] for p in right_eye_pts) / len(right_eye_pts),
     )
+
+    # Ensure left eye (in image) has smaller x coordinate
+    # This handles different naming conventions between backends
+    # (MediaPipe uses person's perspective, dlib uses viewer's perspective)
+    if eye1_center[0] < eye2_center[0]:
+        left_center = eye1_center
+        right_center = eye2_center
+    else:
+        left_center = eye2_center
+        right_center = eye1_center
 
     return left_center, right_center
 
@@ -267,6 +280,12 @@ def _align_face(
     dx = right_eye[0] - left_eye[0]
     dy = right_eye[1] - left_eye[1]
     angle = np.degrees(np.arctan2(dy, dx))
+
+    # Sanity check: angle should be small for normal faces
+    # If angle is extreme, skip alignment (face might be sideways or upside down)
+    if abs(angle) > 45:
+        # Don't try to align extremely rotated faces
+        return None
 
     # Calculate center point between eyes
     eye_center = (
@@ -320,9 +339,16 @@ def _prepare_face_for_embedding(
     frame: np.ndarray,
     face_location: Tuple[int, int, int, int],
     landmarks: Optional[dict] = None,
+    landmarks_from_detector: bool = False,
 ) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
     """
     Optionally pad/resize the face crop based on config settings.
+
+    Args:
+        frame: BGR image
+        face_location: (top, right, bottom, left)
+        landmarks: Facial landmarks dict
+        landmarks_from_detector: True if landmarks came from detection backend
 
     Returns:
         (rgb_image, face_location_for_crop)
@@ -335,7 +361,21 @@ def _prepare_face_for_embedding(
     aligned_face = None
     alignment_angle = 0.0
 
-    if getattr(config, "ENABLE_FACE_ALIGNMENT", False) and landmarks:
+    # Check if we should attempt alignment
+    should_align = getattr(config, "ENABLE_FACE_ALIGNMENT", False) and landmarks
+
+    # If config requires detector landmarks, skip if landmarks are from fallback
+    if should_align and getattr(
+        config, "ALIGNMENT_REQUIRE_DETECTOR_LANDMARKS", False
+    ):
+        if not landmarks_from_detector:
+            should_align = False
+            if debug_enabled():
+                debug.set_face_aligned(
+                    np.zeros((100, 100, 3), dtype=np.uint8), 0.0
+                )  # Show empty for skipped alignment
+
+    if should_align:
         left_eye, right_eye = _get_eye_centers(landmarks)
         if left_eye and right_eye:
             # Calculate angle
@@ -416,6 +456,7 @@ def extract_embedding(
     frame: np.ndarray,
     face_location: Tuple[int, int, int, int],
     landmarks: Optional[dict] = None,
+    landmarks_from_detector: bool = False,
 ) -> Optional[np.ndarray]:
     """
     Extract face embedding vector using configured backend.
@@ -424,6 +465,7 @@ def extract_embedding(
         frame: BGR image from OpenCV
         face_location: Face location tuple
         landmarks: Optional face landmarks for alignment
+        landmarks_from_detector: True if landmarks came from detection backend
 
     Returns:
         Embedding numpy array or None if extraction fails
@@ -434,7 +476,7 @@ def extract_embedding(
     if backend == "dlib":
         # Use preprocessing pipeline for dlib
         rgb_frame, embed_location = _prepare_face_for_embedding(
-            frame, face_location, landmarks
+            frame, face_location, landmarks, landmarks_from_detector
         )
 
         try:
@@ -516,6 +558,12 @@ def process_frame(frame: np.ndarray) -> DetectionResult:
         frame, largest_face, largest_predetected_landmarks
     )
 
+    # Track if landmarks came from detector (for alignment decision)
+    landmarks_from_detector = (
+        largest_predetected_landmarks is not None
+        and len(largest_predetected_landmarks) >= 3
+    )
+
     # Debug: capture landmarks
     if debug_enabled():
         debug.set_landmarks(frame, largest_face, landmarks)
@@ -536,7 +584,9 @@ def process_frame(frame: np.ndarray) -> DetectionResult:
         )
 
     # Step 4: Extract embedding (debug images captured inside _prepare_face_for_embedding)
-    embedding = extract_embedding(frame, largest_face, landmarks)
+    embedding = extract_embedding(
+        frame, largest_face, landmarks, landmarks_from_detector
+    )
 
     if embedding is None:
         return DetectionResult(
