@@ -29,13 +29,33 @@ MAX_FACE_AREA_PERCENT = 60.0
 MIN_LANDMARKS = 5
 
 # Face detection model: 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
-FACE_DETECTION_MODEL = 'hog'
+FACE_DETECTION_MODEL = "hog"
 
 # Number of times to upsample image for face detection
 FACE_DETECTION_UPSAMPLES = 1
 
 # Number of re-samples for encoding (higher = more accurate but slower)
 ENCODING_NUM_JITTERS = 1
+
+# Embedding pre-processing mode:
+#   - "none": use full frame + face location
+#   - "resize": crop face and resize to target size
+#   - "pad_resize": pad face crop to square, then resize
+#   - "align": align face using eye landmarks, then resize
+EMBEDDING_PREPROCESS_MODE = "pad_resize"
+
+# Enable face alignment (rotate to make eyes horizontal)
+# Works with any mode, applied before other preprocessing
+ENABLE_FACE_ALIGNMENT = True
+
+# Target size for embedding crop (square)
+EMBEDDING_TARGET_SIZE = 160
+
+# Padding around face before resize (fraction of max face dimension)
+EMBEDDING_PADDING_RATIO = 0.25
+
+# Padding value for pad_resize (0 = black)
+EMBEDDING_PAD_VALUE = 0
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -70,7 +90,7 @@ HASH_SIMILARITY_THRESHOLD = 10
 # ═══════════════════════════════════════════════════════════════════
 
 # Path to face database file
-DATABASE_PATH = 'face_database.pkl'
+DATABASE_PATH = "face_database.pkl"
 
 # Maximum embeddings to store per person
 MAX_EMBEDDINGS_PER_PERSON = 10
