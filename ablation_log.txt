@@ -1,0 +1,104 @@
+﻿python : D:\miniconda3\envs\ML\lib\site-packages\face_recognition_models\__init__.py:7: 
+UserWarning: pkg_resources is deprecated as an API. See 
+https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is 
+slated for removal as early as 2025-11-30. Refrain from using this package or pin to 
+Setuptools<81.
+At 
+C:\Users\ethan\AppData\Local\Temp\ps-script-9fda838a-f9fd-4d69-bf78-789ce7c309e6.ps1:98 
+char:1
++ python ablation_study.py --dataset test_data --output ablation_result ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\miniconda3\e... Setuptools<81.:String)  
+   [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  from pkg_resources import resource_filename
+2026-02-08 19:17:16.829690: I tensorflow/core/util/port.cc:153] oneDNN custom 
+operations are on. You may see slightly different numerical results due to 
+floating-point round-off errors from different computation orders. To turn them off, 
+set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-02-08 19:17:18.313640: I tensorflow/core/util/port.cc:153] oneDNN custom 
+operations are on. You may see slightly different numerical results due to 
+floating-point round-off errors from different computation orders. To turn them off, 
+set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+W0000 00:00:1770607039.753659   35672 inference_feedback_manager.cc:121] Feedback 
+manager requires a model with a single signature inference. Disabling support for 
+feedback tensors.
+WARNING:tensorflow:From 
+D:\miniconda3\envs\ML\lib\site-packages\tf_keras\src\losses.py:2976: The name 
+tf.losses.sparse_softmax_cross_entropy is deprecated. Please use 
+tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2026-02-08 19:18:17.057587: I tensorflow/core/platform/cpu_feature_guard.cc:210] This 
+TensorFlow binary is optimized to use available CPU instructions in 
+performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI 
+AVX512_BF16 AVX_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate 
+compiler flags.
+W0000 00:00:1770607162.146958   31436 inference_feedback_manager.cc:121] Feedback 
+manager requires a model with a single signature inference. Disabling support for 
+feedback tensors.
+Loading dataset from: test_data
+  Gallery: 30 images, 15 persons
+  Probes:  59 images, 16 identities
+  Using default grid: 10 configurations
+  Thresholds: [0.3, 0.4, 0.5, 0.6, 0.7]
+  Total evaluations: 10 configs x 5 thresholds = 50
+
+[1/10] dlib_hog+dlib preproc=pad_resize align=Y
+Initialized face detector: dlib_hog
+    Best F1=0.948 @ thresh=0.60  (Acc=0.915 TPR=0.979 FPR=0.333)  Det=16.2ms Emb=170.2ms
+[2/10] dlib_cnn+dlib preproc=pad_resize align=Y
+Initialized face detector: dlib_cnn
+    Best F1=0.958 @ thresh=0.60  (Acc=0.932 TPR=0.958 FPR=0.182)  Det=2298.2ms Emb=174.7ms
+[3/10] mediapipe+dlib preproc=pad_resize align=Y
+MediaPipe initialized with Tasks API
+Initialized face detector: mediapipe
+    Best F1=0.969 @ thresh=0.60  (Acc=0.949 TPR=0.959 FPR=0.100)  Det=36.0ms Emb=171.4ms
+[4/10] opencv_dnn+dlib preproc=pad_resize align=Y
+Initialized face detector: opencv_dnn
+    Best F1=0.721 @ thresh=0.60  (Acc=0.593 TPR=0.861 FPR=0.826)  Det=17.6ms Emb=170.5ms
+[5/10] yolo+dlib preproc=pad_resize align=Y
+YOLO face model loaded (with keypoints)
+Initialized face detector: yolo
+    Best F1=0.950 @ thresh=0.60  (Acc=0.915 TPR=1.000 FPR=0.455)  Det=55.7ms Emb=200.4ms
+[6/10] dlib_hog+deepface(ArcFace) preproc=pad_resize align=Y
+Initialized face detector: dlib_hog
+DeepFace initialized with model: ArcFace
+Initialized face embedder: deepface_ArcFace
+    Best F1=0.863 @ thresh=0.70  (Acc=0.780 TPR=1.000 FPR=0.722)  Det=16.9ms Emb=133.3ms
+[7/10] dlib_hog+deepface(Facenet512) preproc=pad_resize align=Y
+Initialized face detector: dlib_hog
+DeepFace initialized with model: Facenet512
+Initialized face embedder: deepface_Facenet512
+    Best F1=0.946 @ thresh=0.40  (Acc=0.915 TPR=0.898 FPR=0.000)  Det=16.6ms Emb=196.5ms
+[8/10] dlib_hog+dlib preproc=none align=Y
+Initialized face detector: dlib_hog
+    Best F1=0.970 @ thresh=0.60  (Acc=0.949 TPR=1.000 FPR=0.273)  Det=16.6ms Emb=170.7ms
+[9/10] dlib_hog+dlib preproc=resize align=Y
+Initialized face detector: dlib_hog
+    Best F1=0.958 @ thresh=0.60  (Acc=0.932 TPR=0.979 FPR=0.250)  Det=16.6ms Emb=171.9ms
+[10/10] mediapipe+dlib preproc=pad_resize align=N
+MediaPipe initialized with Tasks API
+Initialized face detector: mediapipe
+    Best F1=0.980 @ thresh=0.60  (Acc=0.966 TPR=0.980 FPR=0.100)  Det=1.4ms Emb=163.1ms
+
+Results saved to: ablation_results.csv
+
+========================================================================================================================
+ABLATION STUDY RESULTS
+========================================================================================================================
+Detection    Recog      DFModel    Preproc    Align  Thresh     Acc    TPR    FPR     F1  Det ms  Emb ms
+------------------------------------------------------------------------------------------------------------------------
+dlib_hog     dlib                  pad_resize Y      0.60     0.915  0.979  0.333  0.948    16.2   170.2
+dlib_cnn     dlib                  pad_resize Y      0.60     0.932  0.958  0.182  0.958  2298.2   174.7
+mediapipe    dlib                  pad_resize Y      0.60     0.949  0.959  0.100  0.969    36.0   171.4
+opencv_dnn   dlib                  pad_resize Y      0.60     0.593  0.861  0.826  0.721    17.6   170.5
+yolo         dlib                  pad_resize Y      0.60     0.915  1.000  0.455  0.950    55.7   200.4
+dlib_hog     deepface   ArcFace    pad_resize Y      0.70     0.780  1.000  0.722  0.863    16.9   133.3
+dlib_hog     deepface   Facenet512 pad_resize Y      0.40     0.915  0.898  0.000  0.946    16.6   196.5
+dlib_hog     dlib                  none       Y      0.60     0.949  1.000  0.273  0.970    16.6   170.7
+dlib_hog     dlib                  resize     Y      0.60     0.932  0.979  0.250  0.958    16.6   171.9
+mediapipe    dlib                  pad_resize N      0.60     0.966  0.980  0.100  0.980     1.4   163.1
+========================================================================================================================

@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 
 import config
-from face_processor import calculate_face_distance
+from recognition_backends import compute_distance
 
 
 @dataclass
@@ -161,7 +161,7 @@ class FaceDatabase:
         
         for name, person in self.persons.items():
             for stored_embedding in person.embeddings:
-                distance = calculate_face_distance(embedding, stored_embedding)
+                distance = compute_distance(embedding, stored_embedding)
                 all_distances.append((name, distance))
         
         # Sort by distance
@@ -243,7 +243,7 @@ class FaceDatabase:
         # Check if embedding is significantly different from existing ones
         # to avoid adding near-duplicates
         for existing in person.embeddings:
-            if calculate_face_distance(embedding, existing) < 0.1:
+            if compute_distance(embedding, existing) < 0.1:
                 return False  # Too similar, don't add
         
         if len(person.embeddings) >= config.MAX_EMBEDDINGS_PER_PERSON:

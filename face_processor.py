@@ -351,7 +351,7 @@ def _prepare_face_for_embedding(
         landmarks_from_detector: True if landmarks came from detection backend
 
     Returns:
-        (rgb_image, face_location_for_crop)
+        (bgr_image, face_location_for_crop)
     """
     mode = config.EMBEDDING_PREPROCESS_MODE
     debug = get_debug_panel()
@@ -390,7 +390,6 @@ def _prepare_face_for_embedding(
 
     # If alignment succeeded and mode allows, use aligned face
     if aligned_face is not None:
-        rgb_crop = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
         crop_location = (0, target, target, 0)
 
         if debug_enabled():
@@ -398,10 +397,9 @@ def _prepare_face_for_embedding(
             debug.set_face_padded(aligned_face.copy(), "aligned")
             debug.set_embedding_input(aligned_face.copy(), target)
 
-        return rgb_crop, crop_location
+        return aligned_face, crop_location
 
     if mode == "none":
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if debug_enabled():
             # Capture cropped region for debug
             top, right, bottom, left = face_location
@@ -409,7 +407,7 @@ def _prepare_face_for_embedding(
             debug.set_face_crop(crop, "mode: none")
             debug.set_face_padded(crop, "none")
             debug.set_embedding_input(crop, 0)
-        return rgb_frame, face_location
+        return frame, face_location
 
     # Crop face with padding first
     face_crop = _crop_face_with_padding(
@@ -419,8 +417,7 @@ def _prepare_face_for_embedding(
     )
 
     if face_crop.size == 0:
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return rgb_frame, face_location
+        return frame, face_location
 
     # Debug: capture initial crop
     if debug_enabled():
@@ -446,10 +443,9 @@ def _prepare_face_for_embedding(
     if debug_enabled():
         debug.set_embedding_input(face_crop.copy(), target)
 
-    rgb_crop = cv2.cvtColor(face_crop, cv2.COLOR_BGR2RGB)
     # Full crop covers the face
     crop_location = (0, target, target, 0)
-    return rgb_crop, crop_location
+    return face_crop, crop_location
 
 
 def extract_embedding(
@@ -461,6 +457,9 @@ def extract_embedding(
     """
     Extract face embedding vector using configured backend.
 
+    All backends go through the same preprocessing pipeline
+    (alignment, cropping, padding, resizing) for consistent behavior.
+
     Args:
         frame: BGR image from OpenCV
         face_location: Face location tuple
@@ -470,14 +469,16 @@ def extract_embedding(
     Returns:
         Embedding numpy array or None if extraction fails
     """
-    # Check if using dlib backend (uses preprocessing pipeline)
     backend = config.FACE_RECOGNITION_BACKEND
 
+    # Always use preprocessing pipeline for all backends
+    bgr_frame, embed_location = _prepare_face_for_embedding(
+        frame, face_location, landmarks, landmarks_from_detector
+    )
+
     if backend == "dlib":
-        # Use preprocessing pipeline for dlib
-        rgb_frame, embed_location = _prepare_face_for_embedding(
-            frame, face_location, landmarks, landmarks_from_detector
-        )
+        # face_recognition expects RGB
+        rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
 
         try:
             encodings = face_recognition.face_encodings(
@@ -493,9 +494,9 @@ def extract_embedding(
 
         return None
     else:
-        # Use modular embedder backend
+        # Use modular embedder backend with preprocessed BGR frame
         embedder = get_embedder()
-        return embedder.extract(frame, face_location, landmarks)
+        return embedder.extract(bgr_frame, embed_location, landmarks)
 
 
 def process_frame(frame: np.ndarray) -> DetectionResult:

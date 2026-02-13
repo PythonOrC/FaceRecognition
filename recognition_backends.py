@@ -168,6 +168,11 @@ class DeepFaceEmbedder(BaseEmbedder):
 
             if result and len(result) > 0:
                 embedding = np.array(result[0]["embedding"])
+                # Normalize to unit vector so compute_distance uses cosine distance,
+                # keeping thresholds comparable across all backends
+                norm = np.linalg.norm(embedding)
+                if norm > 0:
+                    embedding = embedding / norm
                 return embedding
 
         except Exception as e:
@@ -320,6 +325,14 @@ class AdaFaceEmbedder(BaseEmbedder):
 # ═══════════════════════════════════════════════════════════════════
 
 _embedder_instance: Optional[BaseEmbedder] = None
+_embedder_requested_backend: Optional[str] = None
+
+
+def reset_embedder():
+    """Reset the cached embedder instance. Call before switching backends."""
+    global _embedder_instance, _embedder_requested_backend
+    _embedder_instance = None
+    _embedder_requested_backend = None
 
 
 def get_embedder(backend: str = None) -> BaseEmbedder:
@@ -332,15 +345,14 @@ def get_embedder(backend: str = None) -> BaseEmbedder:
     Returns:
         BaseEmbedder instance
     """
-    global _embedder_instance
+    global _embedder_instance, _embedder_requested_backend
 
     if backend is None:
         backend = config.FACE_RECOGNITION_BACKEND
 
-    # Return cached instance if same backend
-    if _embedder_instance is not None and _embedder_instance.name().startswith(
-        backend
-    ):
+    # Return cached instance if same backend was requested
+    # (covers both successful init and fallback cases)
+    if _embedder_instance is not None and _embedder_requested_backend == backend:
         return _embedder_instance
 
     embedders = {
@@ -352,6 +364,8 @@ def get_embedder(backend: str = None) -> BaseEmbedder:
     if backend not in embedders:
         print(f"Unknown embedder backend: {backend}, using dlib")
         backend = "dlib"
+
+    _embedder_requested_backend = backend
 
     try:
         _embedder_instance = embedders[backend]()

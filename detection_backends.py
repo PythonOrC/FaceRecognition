@@ -392,8 +392,10 @@ class YOLODetector(BaseDetector):
             try:
                 self.model = YOLO("yolov8n-face.pt")
                 self._face_mode = True
-                self._has_keypoints = True  # Face models usually have keypoints
-                print("YOLO face model loaded with keypoints support")
+                # Detect keypoint support from model task type
+                self._has_keypoints = getattr(self.model, "task", None) == "pose"
+                kp_msg = "with keypoints" if self._has_keypoints else "detection only"
+                print(f"YOLO face model loaded ({kp_msg})")
             except Exception:
                 # Fallback to general YOLO model (will detect 'person', not ideal)
                 print("YOLOv8 face model not found, trying general model...")
@@ -466,6 +468,12 @@ class YOLODetector(BaseDetector):
 # ═══════════════════════════════════════════════════════════════════
 
 _detector_instance: Optional[BaseDetector] = None
+
+
+def reset_detector():
+    """Reset the cached detector instance. Call before switching backends."""
+    global _detector_instance
+    _detector_instance = None
 
 
 def get_detector(backend: str = None) -> BaseDetector:
