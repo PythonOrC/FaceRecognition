@@ -31,10 +31,10 @@ MAX_FACE_AREA_PERCENT = 60.0
 #   - "mediapipe": MediaPipe Face Detection (very fast, good accuracy)
 #   - "opencv_dnn": OpenCV DNN Res10 SSD (fast, no extra deps)
 #   - "yolo": YOLOv8 face detection (fast, accurate)
-FACE_DETECTION_BACKEND = "dlib_hog"
+FACE_DETECTION_BACKEND = "mediapipe"
 
 # Minimum detection confidence (0.0 - 1.0)
-FACE_DETECTION_CONFIDENCE = 0.5
+FACE_DETECTION_CONFIDENCE = 0.45
 
 # Minimum number of landmarks required
 MIN_LANDMARKS = 5
@@ -71,11 +71,11 @@ EMBEDDING_PREPROCESS_MODE = "pad_resize"
 
 # Enable face alignment (rotate to make eyes horizontal)
 # Works with any mode, applied before other preprocessing
-ENABLE_FACE_ALIGNMENT = True
+ENABLE_FACE_ALIGNMENT = False
 
 # Only use landmarks from detector for alignment (don't fall back to face_recognition)
 # Set to True if detector landmarks don't match face_recognition (e.g., YOLO)
-ALIGNMENT_REQUIRE_DETECTOR_LANDMARKS = True
+ALIGNMENT_REQUIRE_DETECTOR_LANDMARKS = False
 
 # Target size for embedding crop (square)
 EMBEDDING_TARGET_SIZE = 160
@@ -93,11 +93,11 @@ EMBEDDING_PAD_VALUE = 0
 
 # Distance threshold for face match (lower = stricter)
 # Typical range: 0.4 (strict) to 0.6 (lenient)
-MATCH_THRESHOLD = 0.5
+MATCH_THRESHOLD = 0.42
 
 # Minimum margin between best match and second best match
 # Ensures the match is unambiguous
-MATCH_MARGIN = 0.1
+MATCH_MARGIN = 0.12
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -122,7 +122,7 @@ HASH_SIMILARITY_THRESHOLD = 10
 DATABASE_PATH = "face_database.pkl"
 
 # Maximum embeddings to store per person
-MAX_EMBEDDINGS_PER_PERSON = 10
+MAX_EMBEDDINGS_PER_PERSON = 100
 
 
 # ═══════════════════════════════════════════════════════════════════

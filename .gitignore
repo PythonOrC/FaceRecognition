@@ -5,3 +5,4 @@ dlib_face_recognition_resnet_model_v1.dat
 __pycache__/
 yolov8n.pt
 blaze_face_short_range.tflite
+test_data/clips/demo_outputs/
